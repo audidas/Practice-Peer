@@ -27,7 +27,11 @@ const peerServer = ExpressPeerServer(server,{
 app.use("/mypeer",peerServer);
 
 io.on('connection', (socket)=>{
-    console.log('connected');
+    socket.on('join-room',({roomID,userId})=>{
+    console.log(roomID,userId);
+        socket.join(roomID)
+        socket.to(roomID).broadcast.emit('user-connected',userId);
+    } )
 })
 
 const port = process.env.PORT || 5000;

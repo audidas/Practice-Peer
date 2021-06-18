@@ -1,105 +1,134 @@
-import React from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import React, {useCallback, useEffect} from 'react';
+import {Text, View, Dimensions, ScrollView} from 'react-native';
+import {RTCView, mediaDevices} from 'react-native-webrtc';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+import {connect} from 'react-redux';
+import {joinRoom} from './src/store/actions/videoActions';
 
-const Section: React.FC<{
-  title: string;
-}> = ({children, title}) => {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
+const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('screen');
+
+const App = ({joinRoom, video}) => {
+  const getStream = useCallback(() => {
+    let isFront = true;
+    mediaDevices.enumerateDevices().then(sourceInfos => {
+      let videoSourceId;
+      for (let i = 0; i < sourceInfos.length; i++) {
+        const sourceInfo = sourceInfos[i];
+        if (
+          sourceInfo.kind === 'videoinput' &&
+          sourceInfo.facing === (isFront ? 'front' : 'environment')
+        ) {
+          videoSourceId = sourceInfo.deviceId;
+        }
+      }
+      mediaDevices
+        .getUserMedia({
+          audio: true,
+          video: {
+            mandatory: {
+              minWidth: 500,
+              minHeight: 300,
+              minFrameRate: 30,
+            },
+            facingMode: isFront ? 'user' : 'environment',
+            optional: videoSourceId ? [{sourceId: videoSourceId}] : [],
           },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-};
+        })
+        .then(stream => {
+          // Got stream!
+          joinRoom(stream);
+        })
+        .catch(error => {
+          // Log error
+          console.log(error);
+        });
+    });
+  }, [joinRoom]);
 
-const App = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+  useEffect(() => {
+    getStream();
+  }, [getStream]);
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
+    <>
+      {console.log(video.streams)}
+      <View style={{flex: 1, justifyContent: 'flex-start', padding: 10}}>
         <View
           style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            flex: 1,
+            justifyContent: 'center',
+            height: SCREEN_HEIGHT * 0.5,
+            borderColor: 'yellow',
+            borderWidth: 4,
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.js</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+          {video?.myStream ? (
+            <RTCView
+              style={{width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.4}}
+              streamURL={video?.myStream.toURL()}
+            />
+          ) : null}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+        <View style={{flex: 1, backgroundColor: 'black'}}>
+          <ScrollView horizontal style={{padding: 10}}>
+            <>
+              {video.streams.length > 0 ? (
+                <>
+                  {console.log(video.streams.length)}
+                  {video.streams.map((stream, index) => (
+                    <View
+                      key={index}
+                      style={{
+                        width: 200,
+                        backgroundColor: 'red',
+                        borderWidth: 1,
+                        borderColor: '#fff',
+                        marginRight: 10,
+                        padding: 5,
+                      }}>
+                      <RTCView
+                        style={{
+                          width: 180,
+                          height: SCREEN_HEIGHT * 0.4,
+                        }}
+                        streamURL={stream.toURL()}
+                      />
+                    </View>
+                  ))}
+                </>
+              ) : null}
+            </>
+            {video.remoteStreams.length > 0
+              ? video.remoteStreams.map((stream, index) => (
+                  <View
+                    key={index}
+                    style={{
+                      width: 200,
+                      backgroundColor: 'blue',
+                      borderWidth: 1,
+                      borderColor: '#fff',
+                      marginRight: 10,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                    <RTCView
+                      style={{
+                        width: 180,
+                        height: SCREEN_HEIGHT * 0.4,
+                      }}
+                      streamURL={stream.toURL()}
+                    />
+                  </View>
+                ))
+              : null}
+          </ScrollView>
+        </View>
+      </View>
+    </>
   );
 };
 
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
+const mapStateToProps = ({video}) => ({
+  video,
 });
 
-export default App;
+export default connect(mapStateToProps, {joinRoom})(App);
